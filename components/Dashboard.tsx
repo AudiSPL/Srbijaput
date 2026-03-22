@@ -216,14 +216,14 @@ export default function FleetDashboard() {
 
   function exportRaw() {
     if (!filtered || filtered.length === 0) { alert("Nema podataka za export."); return; }
-    const rows = filtered.map((r: Record<string,string>) => ({
-      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
-      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
-      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
-      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
-      "\u0413\u043e\u0440\u0438\u0432\u043e": isF(r.PRODUCT_INV) ? "Da" : "Ne",
-      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
-      "\u0410\u0434\u0440\u0435\u0441\u0430": r.SITE_STREET,
+    const rows = filtered.map((r: any) => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE || (r.date ? r.date.toLocaleString("sr-RS") : ""),
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.product,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": Math.round(r.amount),
+      "\u0413\u043e\u0440\u0438\u0432\u043e": isF(r.product) ? "Da" : "Ne",
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN || "",
+      "\u0410\u0434\u0440\u0435\u0441\u0430": r.SITE_STREET || "",
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
@@ -251,9 +251,9 @@ export default function FleetDashboard() {
       "Rang": i+1, "Tablica": r.plate, "Vangorivno (RSD)": Math.round(r.total),
     })));
     XLSX.utils.book_append_sheet(wb, wsNF, "Vangorivna");
-    const wsAll = XLSX.utils.json_to_sheet(filtered.map((r: Record<string,string>) => ({
-      "Tablica": r.LICENSE_PLATE_NO, "Datum": r.TRANSACTION_DATE,
-      "Proizvod": r.PRODUCT_INV, "Iznos (RSD)": pNum(r.GROSS_CC), "Lokacija": r.SITE_TOWN,
+    const wsAll = XLSX.utils.json_to_sheet(filtered.map((r: any) => ({
+      "Tablica": r.plate, "Datum": r.date ? r.date.toLocaleString("sr-RS") : "",
+      "Proizvod": r.product, "Iznos (RSD)": Math.round(r.amount), "Lokacija": r.SITE_TOWN || "",
     })));
     XLSX.utils.book_append_sheet(wb, wsAll, "Sve transakcije");
     XLSX.writeFile(wb, "srbijaput_izvestaj_" + new Date().toISOString().slice(0,10) + ".xlsx");
