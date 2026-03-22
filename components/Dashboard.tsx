@@ -63,7 +63,7 @@ function pNum(s: string) { if (!s) return 0; var c = s.replace(/[^0-9.,-]/g, "")
 function fR(n: number) { return new Intl.NumberFormat("sr-RS").format(Math.round(n)) + " RSD"; }
 function fK(n: number) { if (n >= 1e6) return (n/1e6).toFixed(1) + "M"; if (n >= 1e3) return (n/1e3).toFixed(1) + "K"; return n.toFixed(0); }
 
-const FK = ["DIZEL","BMB","MOTION","BENZIN","DIESEL","GASOLINE","EVRO DIZ"];
+const FK = ["DIZEL","BMB","MOTION","BENZIN","DIESEL","GASOLINE","EVRO DIZ","EDMAXX","MAXXM","MAXX"];
 function isF(p: string) { const u = (p||"").toUpperCase(); return FK.some(k => u.includes(k)); }
 
 // ─── Tooltip ────────────────────────────────────────────────
