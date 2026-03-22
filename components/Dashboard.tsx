@@ -10,6 +10,7 @@ import {
 // U development-u: http://localhost:3000/api/fleet
 // U produkciji: https://tvoj-sajt.vercel.app/api/fleet
 // ═══════════════════════════════════════════════════════════════
+import * as XLSX from "xlsx";
 const DATA_URL = "/api/fleet";
 
 // ─── Paleta boja ────────────────────────────────────────────
@@ -212,6 +213,51 @@ export default function FleetDashboard() {
   const [dateTo, setDateTo] = useState("");
   const [timeAgg, setTimeAgg] = useState("month");
   const [showAlerts, setShowAlerts] = useState(false);
+
+  function exportRaw() {
+    if (!filtered || filtered.length === 0) { alert("Nema podataka za export."); return; }
+    const rows = filtered.map((r: Record<string,string>) => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u0413\u043e\u0440\u0438\u0432\u043e": isF(r.PRODUCT_INV) ? "Da" : "Ne",
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+      "\u0410\u0434\u0440\u0435\u0441\u0430": r.SITE_STREET,
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Transakcije");
+    XLSX.writeFile(wb, "srbijaput_podaci_" + new Date().toISOString().slice(0,10) + ".xlsx");
+  }
+
+  function exportReport() {
+    if (!filtered || filtered.length === 0) { alert("Nema podataka za export."); return; }
+    const wb = XLSX.utils.book_new();
+    const wsKPI = XLSX.utils.json_to_sheet([
+      { "Metrika": "Ukupna potrosnja (RSD)", "Vrednost": Math.round(kpis.ts) },
+      { "Metrika": "Broj transakcija",       "Vrednost": kpis.tt },
+      { "Metrika": "Gorivo transakcije",     "Vrednost": kpis.ft },
+      { "Metrika": "Vangorivno (RSD)",       "Vrednost": Math.round(kpis.nfs) },
+      { "Metrika": "Vangorivno %",           "Vrednost": +((kpis.nfs/kpis.ts*100)||0).toFixed(2) },
+      { "Metrika": "Aktivna vozila",         "Vrednost": kpis.uv },
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsKPI, "KPI Rezime");
+    const wsTop = XLSX.utils.json_to_sheet(c1.data.map((r: any, i: number) => ({
+      "Rang": i+1, "Tablica": r.plate, "Ukupno (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsTop, "Top 10 Vozila");
+    const wsNF = XLSX.utils.json_to_sheet(c2.data.map((r: any, i: number) => ({
+      "Rang": i+1, "Tablica": r.plate, "Vangorivno (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsNF, "Vangorivna");
+    const wsAll = XLSX.utils.json_to_sheet(filtered.map((r: Record<string,string>) => ({
+      "Tablica": r.LICENSE_PLATE_NO, "Datum": r.TRANSACTION_DATE,
+      "Proizvod": r.PRODUCT_INV, "Iznos (RSD)": pNum(r.GROSS_CC), "Lokacija": r.SITE_TOWN,
+    })));
+    XLSX.utils.book_append_sheet(wb, wsAll, "Sve transakcije");
+    XLSX.writeFile(wb, "srbijaput_izvestaj_" + new Date().toISOString().slice(0,10) + ".xlsx");
+  }
   const [src, setSrc] = useState("loading");
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
@@ -375,6 +421,10 @@ export default function FleetDashboard() {
         <div style={{display:"flex",gap:8}}>
           <button onClick={() => { setLoading(true); fetchData(); }}
             style={{padding:"8px 12px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",color:C.textMuted,fontSize:13,cursor:"pointer"}}>🔄</button>
+          <button onClick={exportRaw}
+            style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",color:C.textMuted,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>📊 Подаци</button>
+          <button onClick={exportReport}
+            style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${C.accentGlow}`,background:C.accentGlow,color:C.accent,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>📈 Извештај</button>
           <button onClick={() => setShowAlerts(true)}
             style={{padding:"8px 16px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",color:C.textMuted,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>🔔 Обавештења</button>
         </div>
