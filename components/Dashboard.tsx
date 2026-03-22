@@ -358,10 +358,10 @@ export default function FleetDashboard() {
   return (
     <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'Manrope','SF Pro Display',-apple-system,sans-serif"}}>
       <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-      <style>{`*{box-sizing:border-box;margin:0}::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:${C.bg}}::-webkit-scrollbar-thumb{background:${C.border};border-radius:3px}input[type="date"],input[type="time"]{color-scheme:dark}@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}`}</style>
+      <style>{`*{box-sizing:border-box;margin:0}::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:${C.bg}}::-webkit-scrollbar-thumb{background:${C.border};border-radius:3px}input[type="date"],input[type="time"]{color-scheme:dark}@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@media(max-width:768px){.mob-hdr{padding:10px 14px!important;flex-wrap:wrap;gap:8px}.mob-hdr-title{font-size:12px!important}.mob-hdr-sub{font-size:10px!important}.mob-pad{padding:12px 10px 48px!important}.mob-grid{grid-template-columns:1fr!important}.mob-kpi{display:grid!important;grid-template-columns:1fr 1fr!important;gap:10px!important}.mob-hdr-right{width:100%;justify-content:flex-end}}`}</style>
 
       {/* Header */}
-      <div style={{borderBottom:`1px solid ${C.border}`,padding:"14px 28px",display:"flex",justifyContent:"space-between",alignItems:"center",backdropFilter:"blur(12px)",position:"sticky",top:0,zIndex:100,background:"rgba(7,8,13,0.88)"}}>
+      <div className="mob-hdr" style={{borderBottom:`1px solid ${C.border}`,padding:"14px 28px",display:"flex",justifyContent:"space-between",alignItems:"center",backdropFilter:"blur(12px)",position:"sticky",top:0,zIndex:100,background:"rgba(7,8,13,0.88)"}}>
         <div style={{display:"flex",alignItems:"center",gap:14}}>
           <img src="/logo.png" alt="Србијапут" style={{height:42,borderRadius:6}}/>
           <div>
@@ -380,7 +380,7 @@ export default function FleetDashboard() {
         </div>
       </div>
 
-      <div style={{padding:"22px 28px 48px",maxWidth:1400,margin:"0 auto"}}>
+      <div className="mob-pad" style={{padding:"22px 28px 48px",maxWidth:1400,margin:"0 auto"}}>
         {/* Filteri */}
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:22,flexWrap:"wrap",animation:"fadeIn 0.4s ease"}}>
           <span style={{color:C.textMuted,fontSize:11,fontWeight:500,textTransform:"uppercase",letterSpacing:"0.05em"}}>Филтер:</span>
@@ -395,7 +395,7 @@ export default function FleetDashboard() {
         </div>
 
         {/* KPI */}
-        <div style={{display:"flex",gap:14,marginBottom:24,flexWrap:"wrap",animation:"fadeIn 0.5s ease"}}>
+        <div className="mob-kpi" style={{display:"flex",gap:14,marginBottom:24,flexWrap:"wrap",animation:"fadeIn 0.5s ease"}}>
           <KPI title="Укупна потрошња" value={fR(kpis.ts)} sub={`${fK(kpis.ts)} за сва возила`} icon="💰" color={C.accent} dim={C.accentGlow}/>
           <KPI title="Трансакције" value={kpis.tt.toLocaleString()} sub={`${kpis.ft} гориво · ${kpis.tt-kpis.ft} остало`} icon="📊" color={C.cyan} dim={C.cyanDim}/>
           <KPI title="Вангоривна потрошња" value={fR(kpis.nfs)} sub={`${((kpis.nfs/kpis.ts)*100||0).toFixed(1)}% од укупне`} icon="🛒" color={C.amber} dim={C.amberDim}/>
@@ -403,7 +403,7 @@ export default function FleetDashboard() {
         </div>
 
         {/* Grafikoni 1 & 2 */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18,marginBottom:18,animation:"fadeIn 0.6s ease"}}>
+        <div className="mob-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18,marginBottom:18,animation:"fadeIn 0.6s ease"}}>
           <CCard title="Топ 10 возила по укупној потрошњи" sub="Сви производи"
             callouts={<><Callout icon="🏆" label="Највећи потрошач" value={c1.topP||"—"} color={C.accent}/><Callout icon="💰" label="Износ #1" value={fR(c1.topV||0)} color={C.accentLight}/><Callout icon="Σ" label="Укупно Топ 10" value={fR(c1.total)} color={C.text}/></>}>
             <ResponsiveContainer width="100%" height={310}>
