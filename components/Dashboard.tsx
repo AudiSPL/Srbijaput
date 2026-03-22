@@ -10,6 +10,7 @@ import {
 // U development-u: http://localhost:3000/api/fleet
 // U produkciji: https://tvoj-sajt.vercel.app/api/fleet
 // ═══════════════════════════════════════════════════════════════
+import * as XLSX from "xlsx";
 const DATA_URL = "/api/fleet";
 
 // ─── Paleta boja ────────────────────────────────────────────
@@ -68,6 +69,56 @@ function isF(p: string) { const u = (p||"").toUpperCase(); return FK.some(k => u
 // ─── Tooltip ────────────────────────────────────────────────
 function TT({ active, payload, label, fmt }: any) {
   if (!active || !payload?.length) return null;
+  function exportRaw() {
+    const ws = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u0413\u043e\u0440\u0438\u0432\u043e": isF(r.PRODUCT_INV) ? "\u0414\u0430" : "\u041d\u0435",
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+      "\u0410\u0434\u0440\u0435\u0441\u0430": r.SITE_STREET,
+    })));
+    XLSX.utils.sheet_add_aoa(ws, [], {origin: 0});
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "\u0422\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_podaci_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
+  function exportReport() {
+    const wb = XLSX.utils.book_new();
+    const wsKPI = XLSX.utils.json_to_sheet([
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0423\u043a\u0443\u043f\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.ts) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0411\u0440\u043e\u0458 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.tt },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0413\u043e\u0440\u0438\u0432\u043e \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.ft },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.nfs) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e % \u043e\u0434 \u0443\u043a\u0443\u043f\u043d\u043e\u0433", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": +((kpis.nfs/kpis.ts*100)||0).toFixed(2) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0410\u043a\u0442\u0438\u0432\u043d\u0430 \u0432\u043e\u0437\u0438\u043b\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.uv },
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsKPI, "KPI \u0420\u0435\u0437\u0438\u043c\u0435");
+    const wsTop = XLSX.utils.json_to_sheet(c1.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0423\u043a\u0443\u043f\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsTop, "\u0422\u043e\u043f 10 \u0412\u043e\u0437\u0438\u043b\u0430");
+    const wsNF = XLSX.utils.json_to_sheet(c2.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsNF, "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430");
+    const wsAll = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+    })));
+    XLSX.utils.book_append_sheet(wb, wsAll, "\u0421\u0432\u0435 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_izvestaj_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
   return (
     <div style={{background:"rgba(15,16,24,0.97)",border:`1px solid ${C.borderLight}`,borderRadius:10,padding:"10px 14px",backdropFilter:"blur(12px)",boxShadow:"0 8px 32px rgba(0,0,0,0.6)"}}>
       <div style={{color:C.textMuted,fontSize:11,marginBottom:5,fontFamily:"'JetBrains Mono',monospace"}}>{label}</div>
@@ -83,6 +134,56 @@ function TT({ active, payload, label, fmt }: any) {
 
 // ─── Data Callout ───────────────────────────────────────────
 function Callout({ icon, label, value, color }: { icon: string; label: string; value: string; color?: string }) {
+  function exportRaw() {
+    const ws = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u0413\u043e\u0440\u0438\u0432\u043e": isF(r.PRODUCT_INV) ? "\u0414\u0430" : "\u041d\u0435",
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+      "\u0410\u0434\u0440\u0435\u0441\u0430": r.SITE_STREET,
+    })));
+    XLSX.utils.sheet_add_aoa(ws, [], {origin: 0});
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "\u0422\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_podaci_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
+  function exportReport() {
+    const wb = XLSX.utils.book_new();
+    const wsKPI = XLSX.utils.json_to_sheet([
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0423\u043a\u0443\u043f\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.ts) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0411\u0440\u043e\u0458 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.tt },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0413\u043e\u0440\u0438\u0432\u043e \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.ft },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.nfs) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e % \u043e\u0434 \u0443\u043a\u0443\u043f\u043d\u043e\u0433", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": +((kpis.nfs/kpis.ts*100)||0).toFixed(2) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0410\u043a\u0442\u0438\u0432\u043d\u0430 \u0432\u043e\u0437\u0438\u043b\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.uv },
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsKPI, "KPI \u0420\u0435\u0437\u0438\u043c\u0435");
+    const wsTop = XLSX.utils.json_to_sheet(c1.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0423\u043a\u0443\u043f\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsTop, "\u0422\u043e\u043f 10 \u0412\u043e\u0437\u0438\u043b\u0430");
+    const wsNF = XLSX.utils.json_to_sheet(c2.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsNF, "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430");
+    const wsAll = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+    })));
+    XLSX.utils.book_append_sheet(wb, wsAll, "\u0421\u0432\u0435 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_izvestaj_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
   return (
     <div style={{display:"inline-flex",alignItems:"center",gap:10,background:"rgba(255,255,255,0.025)",border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 14px",margin:"0 6px 6px 0"}}>
       <span style={{fontSize:15}}>{icon}</span>
@@ -97,6 +198,56 @@ function Callout({ icon, label, value, color }: { icon: string; label: string; v
 // ─── KPI Card ───────────────────────────────────────────────
 function KPI({ title, value, sub, icon, dim }: { title: string; value: string; sub?: string; icon: string; color?: string; dim: string }) {
   const [h, sH] = useState(false);
+  function exportRaw() {
+    const ws = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u0413\u043e\u0440\u0438\u0432\u043e": isF(r.PRODUCT_INV) ? "\u0414\u0430" : "\u041d\u0435",
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+      "\u0410\u0434\u0440\u0435\u0441\u0430": r.SITE_STREET,
+    })));
+    XLSX.utils.sheet_add_aoa(ws, [], {origin: 0});
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "\u0422\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_podaci_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
+  function exportReport() {
+    const wb = XLSX.utils.book_new();
+    const wsKPI = XLSX.utils.json_to_sheet([
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0423\u043a\u0443\u043f\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.ts) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0411\u0440\u043e\u0458 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.tt },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0413\u043e\u0440\u0438\u0432\u043e \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.ft },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.nfs) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e % \u043e\u0434 \u0443\u043a\u0443\u043f\u043d\u043e\u0433", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": +((kpis.nfs/kpis.ts*100)||0).toFixed(2) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0410\u043a\u0442\u0438\u0432\u043d\u0430 \u0432\u043e\u0437\u0438\u043b\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.uv },
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsKPI, "KPI \u0420\u0435\u0437\u0438\u043c\u0435");
+    const wsTop = XLSX.utils.json_to_sheet(c1.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0423\u043a\u0443\u043f\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsTop, "\u0422\u043e\u043f 10 \u0412\u043e\u0437\u0438\u043b\u0430");
+    const wsNF = XLSX.utils.json_to_sheet(c2.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsNF, "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430");
+    const wsAll = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+    })));
+    XLSX.utils.book_append_sheet(wb, wsAll, "\u0421\u0432\u0435 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_izvestaj_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
   return (
     <div onMouseEnter={() => sH(true)} onMouseLeave={() => sH(false)}
       style={{background:h?C.cardHover:C.card,border:`1px solid ${h?C.borderLight:C.border}`,borderRadius:14,padding:"22px 24px",flex:1,minWidth:200,transition:"all 0.3s cubic-bezier(0.4,0,0.2,1)",transform:h?"translateY(-2px)":"none",boxShadow:h?"0 8px 24px rgba(0,0,0,0.4)":"none",position:"relative",overflow:"hidden"}}>
@@ -113,6 +264,56 @@ function KPI({ title, value, sub, icon, dim }: { title: string; value: string; s
 
 // ─── Chart Card ─────────────────────────────────────────────
 function CCard({ title, sub, children, extra, callouts }: any) {
+  function exportRaw() {
+    const ws = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u0413\u043e\u0440\u0438\u0432\u043e": isF(r.PRODUCT_INV) ? "\u0414\u0430" : "\u041d\u0435",
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+      "\u0410\u0434\u0440\u0435\u0441\u0430": r.SITE_STREET,
+    })));
+    XLSX.utils.sheet_add_aoa(ws, [], {origin: 0});
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "\u0422\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_podaci_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
+  function exportReport() {
+    const wb = XLSX.utils.book_new();
+    const wsKPI = XLSX.utils.json_to_sheet([
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0423\u043a\u0443\u043f\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.ts) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0411\u0440\u043e\u0458 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.tt },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0413\u043e\u0440\u0438\u0432\u043e \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.ft },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.nfs) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e % \u043e\u0434 \u0443\u043a\u0443\u043f\u043d\u043e\u0433", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": +((kpis.nfs/kpis.ts*100)||0).toFixed(2) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0410\u043a\u0442\u0438\u0432\u043d\u0430 \u0432\u043e\u0437\u0438\u043b\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.uv },
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsKPI, "KPI \u0420\u0435\u0437\u0438\u043c\u0435");
+    const wsTop = XLSX.utils.json_to_sheet(c1.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0423\u043a\u0443\u043f\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsTop, "\u0422\u043e\u043f 10 \u0412\u043e\u0437\u0438\u043b\u0430");
+    const wsNF = XLSX.utils.json_to_sheet(c2.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsNF, "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430");
+    const wsAll = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+    })));
+    XLSX.utils.book_append_sheet(wb, wsAll, "\u0421\u0432\u0435 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_izvestaj_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
   return (
     <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:"22px 22px 14px",display:"flex",flexDirection:"column" as const}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
@@ -130,6 +331,56 @@ function CCard({ title, sub, children, extra, callouts }: any) {
 
 // ─── Pill Toggle ────────────────────────────────────────────
 function Pill({ opts, val, onChange }: { opts: {l:string;v:string}[]; val: string; onChange: (v:string) => void }) {
+  function exportRaw() {
+    const ws = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u0413\u043e\u0440\u0438\u0432\u043e": isF(r.PRODUCT_INV) ? "\u0414\u0430" : "\u041d\u0435",
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+      "\u0410\u0434\u0440\u0435\u0441\u0430": r.SITE_STREET,
+    })));
+    XLSX.utils.sheet_add_aoa(ws, [], {origin: 0});
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "\u0422\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_podaci_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
+  function exportReport() {
+    const wb = XLSX.utils.book_new();
+    const wsKPI = XLSX.utils.json_to_sheet([
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0423\u043a\u0443\u043f\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.ts) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0411\u0440\u043e\u0458 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.tt },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0413\u043e\u0440\u0438\u0432\u043e \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.ft },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.nfs) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e % \u043e\u0434 \u0443\u043a\u0443\u043f\u043d\u043e\u0433", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": +((kpis.nfs/kpis.ts*100)||0).toFixed(2) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0410\u043a\u0442\u0438\u0432\u043d\u0430 \u0432\u043e\u0437\u0438\u043b\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.uv },
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsKPI, "KPI \u0420\u0435\u0437\u0438\u043c\u0435");
+    const wsTop = XLSX.utils.json_to_sheet(c1.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0423\u043a\u0443\u043f\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsTop, "\u0422\u043e\u043f 10 \u0412\u043e\u0437\u0438\u043b\u0430");
+    const wsNF = XLSX.utils.json_to_sheet(c2.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsNF, "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430");
+    const wsAll = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+    })));
+    XLSX.utils.book_append_sheet(wb, wsAll, "\u0421\u0432\u0435 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_izvestaj_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
   return (
     <div style={{display:"flex",background:C.bg,borderRadius:8,padding:3,border:`1px solid ${C.border}`}}>
       {opts.map(o => (
@@ -151,6 +402,56 @@ function AlertPanel({ show, onClose }: { show: boolean; onClose: () => void }) {
   const [th, sTh] = useState({ overSpend: true, lateRefuel: true, nonFuel: false });
 
   if (!show) return null;
+  function exportRaw() {
+    const ws = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u0413\u043e\u0440\u0438\u0432\u043e": isF(r.PRODUCT_INV) ? "\u0414\u0430" : "\u041d\u0435",
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+      "\u0410\u0434\u0440\u0435\u0441\u0430": r.SITE_STREET,
+    })));
+    XLSX.utils.sheet_add_aoa(ws, [], {origin: 0});
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "\u0422\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_podaci_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
+  function exportReport() {
+    const wb = XLSX.utils.book_new();
+    const wsKPI = XLSX.utils.json_to_sheet([
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0423\u043a\u0443\u043f\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.ts) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0411\u0440\u043e\u0458 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.tt },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0413\u043e\u0440\u0438\u0432\u043e \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.ft },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.nfs) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e % \u043e\u0434 \u0443\u043a\u0443\u043f\u043d\u043e\u0433", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": +((kpis.nfs/kpis.ts*100)||0).toFixed(2) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0410\u043a\u0442\u0438\u0432\u043d\u0430 \u0432\u043e\u0437\u0438\u043b\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.uv },
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsKPI, "KPI \u0420\u0435\u0437\u0438\u043c\u0435");
+    const wsTop = XLSX.utils.json_to_sheet(c1.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0423\u043a\u0443\u043f\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsTop, "\u0422\u043e\u043f 10 \u0412\u043e\u0437\u0438\u043b\u0430");
+    const wsNF = XLSX.utils.json_to_sheet(c2.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsNF, "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430");
+    const wsAll = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+    })));
+    XLSX.utils.book_append_sheet(wb, wsAll, "\u0421\u0432\u0435 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_izvestaj_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
   return (
     <div style={{position:"fixed",inset:0,zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.75)",backdropFilter:"blur(8px)"}} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{background:C.card,border:`1px solid ${C.borderLight}`,borderRadius:16,padding:32,width:"90%",maxWidth:520,boxShadow:"0 24px 64px rgba(0,0,0,0.5)"}}>
@@ -240,7 +541,57 @@ export default function FleetDashboard() {
   // Auto-refresh svakih 10 minuta
   useEffect(() => {
     const interval = setInterval(fetchData, 10 * 60 * 1000);
-    return () => clearInterval(interval);
+    function exportRaw() {
+    const ws = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u0413\u043e\u0440\u0438\u0432\u043e": isF(r.PRODUCT_INV) ? "\u0414\u0430" : "\u041d\u0435",
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+      "\u0410\u0434\u0440\u0435\u0441\u0430": r.SITE_STREET,
+    })));
+    XLSX.utils.sheet_add_aoa(ws, [], {origin: 0});
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "\u0422\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_podaci_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
+  function exportReport() {
+    const wb = XLSX.utils.book_new();
+    const wsKPI = XLSX.utils.json_to_sheet([
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0423\u043a\u0443\u043f\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.ts) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0411\u0440\u043e\u0458 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.tt },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0413\u043e\u0440\u0438\u0432\u043e \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.ft },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.nfs) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e % \u043e\u0434 \u0443\u043a\u0443\u043f\u043d\u043e\u0433", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": +((kpis.nfs/kpis.ts*100)||0).toFixed(2) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0410\u043a\u0442\u0438\u0432\u043d\u0430 \u0432\u043e\u0437\u0438\u043b\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.uv },
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsKPI, "KPI \u0420\u0435\u0437\u0438\u043c\u0435");
+    const wsTop = XLSX.utils.json_to_sheet(c1.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0423\u043a\u0443\u043f\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsTop, "\u0422\u043e\u043f 10 \u0412\u043e\u0437\u0438\u043b\u0430");
+    const wsNF = XLSX.utils.json_to_sheet(c2.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsNF, "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430");
+    const wsAll = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+    })));
+    XLSX.utils.book_append_sheet(wb, wsAll, "\u0421\u0432\u0435 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_izvestaj_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
+  return () => clearInterval(interval);
   }, [fetchData]);
 
   // ─── Obrada podataka ──────────────────────────────────
@@ -354,6 +705,56 @@ export default function FleetDashboard() {
       </button>
     </div>
   );
+
+  function exportRaw() {
+    const ws = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u0413\u043e\u0440\u0438\u0432\u043e": isF(r.PRODUCT_INV) ? "\u0414\u0430" : "\u041d\u0435",
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+      "\u0410\u0434\u0440\u0435\u0441\u0430": r.SITE_STREET,
+    })));
+    XLSX.utils.sheet_add_aoa(ws, [], {origin: 0});
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "\u0422\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_podaci_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
+  function exportReport() {
+    const wb = XLSX.utils.book_new();
+    const wsKPI = XLSX.utils.json_to_sheet([
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0423\u043a\u0443\u043f\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.ts) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0411\u0440\u043e\u0458 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.tt },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0413\u043e\u0440\u0438\u0432\u043e \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.ft },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.nfs) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e % \u043e\u0434 \u0443\u043a\u0443\u043f\u043d\u043e\u0433", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": +((kpis.nfs/kpis.ts*100)||0).toFixed(2) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0410\u043a\u0442\u0438\u0432\u043d\u0430 \u0432\u043e\u0437\u0438\u043b\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.uv },
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsKPI, "KPI \u0420\u0435\u0437\u0438\u043c\u0435");
+    const wsTop = XLSX.utils.json_to_sheet(c1.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0423\u043a\u0443\u043f\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsTop, "\u0422\u043e\u043f 10 \u0412\u043e\u0437\u0438\u043b\u0430");
+    const wsNF = XLSX.utils.json_to_sheet(c2.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsNF, "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430");
+    const wsAll = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+    })));
+    XLSX.utils.book_append_sheet(wb, wsAll, "\u0421\u0432\u0435 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_izvestaj_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'Manrope','SF Pro Display',-apple-system,sans-serif"}}>
@@ -469,7 +870,57 @@ export default function FleetDashboard() {
                 <Tooltip content={({active,payload,label}: any) => {
                   if (!active || !payload?.length) return null;
                   const item = c4.data.find(d => d.plate === label);
-                  return (<div style={{background:"rgba(15,16,24,0.97)",border:`1px solid ${C.borderLight}`,borderRadius:10,padding:"10px 14px",boxShadow:"0 8px 32px rgba(0,0,0,0.6)"}}>
+                  function exportRaw() {
+    const ws = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u0413\u043e\u0440\u0438\u0432\u043e": isF(r.PRODUCT_INV) ? "\u0414\u0430" : "\u041d\u0435",
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+      "\u0410\u0434\u0440\u0435\u0441\u0430": r.SITE_STREET,
+    })));
+    XLSX.utils.sheet_add_aoa(ws, [], {origin: 0});
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "\u0422\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_podaci_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
+  function exportReport() {
+    const wb = XLSX.utils.book_new();
+    const wsKPI = XLSX.utils.json_to_sheet([
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0423\u043a\u0443\u043f\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.ts) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0411\u0440\u043e\u0458 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.tt },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0413\u043e\u0440\u0438\u0432\u043e \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.ft },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430 \u043f\u043e\u0442\u0440\u043e\u0448\u045a\u0430 (RSD)", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": Math.round(kpis.nfs) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e % \u043e\u0434 \u0443\u043a\u0443\u043f\u043d\u043e\u0433", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": +((kpis.nfs/kpis.ts*100)||0).toFixed(2) },
+      { "\u041c\u0435\u0442\u0440\u0438\u043a\u0430": "\u0410\u043a\u0442\u0438\u0432\u043d\u0430 \u0432\u043e\u0437\u0438\u043b\u0430", "\u0412\u0440\u0435\u0434\u043d\u043e\u0441\u0442": kpis.uv },
+    ]);
+    XLSX.utils.book_append_sheet(wb, wsKPI, "KPI \u0420\u0435\u0437\u0438\u043c\u0435");
+    const wsTop = XLSX.utils.json_to_sheet(c1.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0423\u043a\u0443\u043f\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsTop, "\u0422\u043e\u043f 10 \u0412\u043e\u0437\u0438\u043b\u0430");
+    const wsNF = XLSX.utils.json_to_sheet(c2.data.map((r: any, i: number) => ({
+      "\u0420\u0430\u043d\u0433": i+1,
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.plate,
+      "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u043e (RSD)": Math.round(r.total),
+    })));
+    XLSX.utils.book_append_sheet(wb, wsNF, "\u0412\u0430\u043d\u0433\u043e\u0440\u0438\u0432\u043d\u0430");
+    const wsAll = XLSX.utils.json_to_sheet(filtered.map(r => ({
+      "\u0422\u0430\u0431\u043b\u0438\u0446\u0430": r.LICENSE_PLATE_NO,
+      "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE,
+      "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.PRODUCT_INV,
+      "\u0418\u0437\u043d\u043e\u0441 (RSD)": pNum(r.GROSS_CC),
+      "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN,
+    })));
+    XLSX.utils.book_append_sheet(wb, wsAll, "\u0421\u0432\u0435 \u0442\u0440\u0430\u043d\u0441\u0430\u043a\u0446\u0438\u0458\u0435");
+    XLSX.writeFile(wb, `srbijaput_izvestaj_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
+  return (<div style={{background:"rgba(15,16,24,0.97)",border:`1px solid ${C.borderLight}`,borderRadius:10,padding:"10px 14px",boxShadow:"0 8px 32px rgba(0,0,0,0.6)"}}>
                     <div style={{color:C.textMuted,fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>{label}</div>
                     <div style={{color:C.text,fontSize:14,marginTop:4}}>Последње точење: <strong style={{color:C.rose}}>{item?.time}</strong></div>
                   </div>);
