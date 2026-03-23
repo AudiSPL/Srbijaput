@@ -71,6 +71,13 @@ function pNum(s: string) {
 function fR(n: number) { return new Intl.NumberFormat("sr-RS").format(Math.round(n)) + " RSD"; }
 function fK(n: number) { if (n >= 1e6) return (n/1e6).toFixed(1) + "M"; if (n >= 1e3) return (n/1e3).toFixed(1) + "K"; return n.toFixed(0); }
 
+function formatPlate(p: string) {
+  const clean = (p || "").toUpperCase().replace(/[^A-Z0-9ŠĐČĆŽ]/g, "");
+  if (clean.length === 7) return `${clean.slice(0,2)}-${clean.slice(2,5)}-${clean.slice(5)}`;
+  if (clean.length >= 8) return `${clean.slice(0,2)}-${clean.slice(2,6)}-${clean.slice(6)}`;
+  return clean || "НЕПОЗНАТО";
+}
+
 function getCategory(p: string) {
   const u = (p||"").toLowerCase();
   if (["ad blue", "antifriz", "tecnosti", "aditivi"].some(k => u.includes(k))) return "Tecnosti za vozila";
@@ -259,14 +266,14 @@ export default function FleetDashboard() {
       { "Metrika": "Aktivna vozila",         "Vrednost": kpis.uv },
     ]);
     XLSX.utils.book_append_sheet(wb, wsKPI, "KPI Rezime");
-    const wsTop = XLSX.utils.json_to_sheet(c1.data.map((r: any, i: number) => ({
+    const wsTop = XLSX.utils.json_to_sheet(c_top_ukupno.data.map((r: any, i: number) => ({
       "Rang": i+1, "Tablica": r.plate, "Ukupno (RSD)": Math.round(r.total),
     })));
     XLSX.utils.book_append_sheet(wb, wsTop, "Top 10 Vozila");
-    const wsNF = XLSX.utils.json_to_sheet(c2.data.map((r: any, i: number) => ({
-      "Rang": i+1, "Tablica": r.plate, "Vangorivno (RSD)": Math.round(r.total),
+    const wsNF = XLSX.utils.json_to_sheet(c_top_licno.data.map((r: any, i: number) => ({
+      "Rang": i+1, "Tablica": r.plate, "Licna potrosnja (RSD)": Math.round(r.total),
     })));
-    XLSX.utils.book_append_sheet(wb, wsNF, "Vangorivna");
+    XLSX.utils.book_append_sheet(wb, wsNF, "Licna potrosnja");
     const wsAll = XLSX.utils.json_to_sheet(filtered.map((r: any) => ({
       "Tablica": r.plate, "Datum": r.date ? r.date.toLocaleString("sr-RS") : "",
       "Proizvod": r.product, "Kategorija": r.kategorija, "Iznos (RSD)": Math.round(r.amount), 
@@ -315,7 +322,7 @@ export default function FleetDashboard() {
       liters: pNum(r.QUANTITY),
       unitPrice: pNum(r.UNITPRICE),
       kategorija: getCategory((r.PRODUCT_INV || "").trim()),
-      plate: (r.LICENSE_PLATE_NO || "").trim(),
+      plate: formatPlate(r.LICENSE_PLATE_NO),
       product: (r.PRODUCT_INV || "").trim(),
     })).filter(r => r.date && r.plate),
   [rawData]);
@@ -346,8 +353,8 @@ export default function FleetDashboard() {
     return { ts, tt, ft, nfs, uv, totalLiters, avgPrice };
   }, [filtered]);
 
-  // Grafikon 1: Top 10 ukupno
-  const c1 = useMemo(() => {
+  // 1. Top 10 ukupno
+  const c_top_ukupno = useMemo(() => {
     const m: Record<string,number> = {};
     filtered.forEach(r => { m[r.plate] = (m[r.plate]||0) + r.amount; });
     const s = Object.entries(m).sort((a,b) => b[1]-a[1]).slice(0,10);
@@ -355,17 +362,35 @@ export default function FleetDashboard() {
     return { data: s.map(([plate,total]) => ({plate,total:Math.round(total)})), topP: tp?.[0], topV: tp?.[1], total: tot };
   }, [filtered]);
 
-  // Grafikon 2: Top 10 van goriva
-  const c2 = useMemo(() => {
+  // 2. Top 10 licna potrosnja
+  const c_top_licno = useMemo(() => {
     const m: Record<string,number> = {};
-    filtered.filter((r: any) => r.kategorija !== "Gorivo").forEach((r: any) => { m[r.plate] = (m[r.plate]||0) + r.amount; });
+    filtered.filter((r: any) => r.kategorija === "Troskovi ostalo").forEach((r: any) => { m[r.plate] = (m[r.plate]||0) + r.amount; });
     const s = Object.entries(m).sort((a,b) => b[1]-a[1]).slice(0,10);
     const tp = s[0]; const tot = s.reduce((sum,e) => sum + e[1], 0);
     return { data: s.map(([plate,total]) => ({plate,total:Math.round(total)})), topP: tp?.[0], topV: tp?.[1], total: tot };
   }, [filtered]);
 
-  // Grafikon 3: Trend
-  const c3 = useMemo(() => {
+  // 3. Top 10 gorivo (Litri)
+  const c_top_gorivo = useMemo(() => {
+    const m: Record<string,number> = {};
+    filtered.filter((r: any) => r.kategorija === "Gorivo").forEach((r: any) => { m[r.plate] = (m[r.plate]||0) + r.liters; });
+    const s = Object.entries(m).sort((a,b) => b[1]-a[1]).slice(0,10);
+    const tp = s[0]; const tot = s.reduce((sum,e) => sum + e[1], 0);
+    return { data: s.map(([plate,total]) => ({plate,total:Math.round(total)})), topP: tp?.[0], topV: tp?.[1], total: tot };
+  }, [filtered]);
+
+  // 4. Top 10 maziva
+  const c_top_maziva = useMemo(() => {
+    const m: Record<string,number> = {};
+    filtered.filter((r: any) => r.kategorija === "Tecnosti za vozila").forEach((r: any) => { m[r.plate] = (m[r.plate]||0) + r.amount; });
+    const s = Object.entries(m).sort((a,b) => b[1]-a[1]).slice(0,10);
+    const tp = s[0]; const tot = s.reduce((sum,e) => sum + e[1], 0);
+    return { data: s.map(([plate,total]) => ({plate,total:Math.round(total)})), topP: tp?.[0], topV: tp?.[1], total: tot };
+  }, [filtered]);
+
+  // Grafikon 3: Trend potrosnje
+  const c_trend_potrosnja = useMemo(() => {
     const byP: Record<string,number> = {};
     filtered.forEach(r => { byP[r.plate] = (byP[r.plate]||0) + r.amount; });
     const top10 = Object.entries(byP).sort((a,b) => b[1]-a[1]).slice(0,10).map(e => e[0]);
@@ -390,8 +415,44 @@ export default function FleetDashboard() {
     };
   }, [filtered, timeAgg]);
 
+  // Novi grafikon 5: Trend cene goriva (prosek po vrsti goriva)
+  const c_trend_cena = useMemo(() => {
+    const fuelData = filtered.filter((r: any) => r.kategorija === "Gorivo");
+    const products = Array.from(new Set(fuelData.map((r: any) => r.product)));
+    const bkCost: Record<string, Record<string,number>> = {};
+    const bkLiters: Record<string, Record<string,number>> = {};
+    fuelData.forEach((r: any) => {
+      let key: string;
+      if (timeAgg === "week") {
+        const d = new Date(r.date!);
+        const day = d.getDay(); const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        key = new Date(d.setDate(diff)).toISOString().slice(0,10);
+      } else {
+        key = `${r.date!.getFullYear()}-${String(r.date!.getMonth()+1).padStart(2,"0")}`;
+      }
+      if (!bkCost[key]) bkCost[key] = {};
+      if (!bkLiters[key]) bkLiters[key] = {};
+      bkCost[key][r.product]   = (bkCost[key][r.product]||0)   + (r.amount||0);
+      bkLiters[key][r.product] = (bkLiters[key][r.product]||0) + (r.liters||0);
+    });
+    const periods = Object.keys(bkCost).sort();
+    return {
+      products,
+      data: periods.map(p => {
+        const row: any = { period: p };
+        products.forEach((prod: any) => {
+          const l = bkLiters[p]?.[prod] || 0;
+          const c = bkCost[p]?.[prod] || 0;
+          row[prod] = l > 0 ? +(c/l).toFixed(2) : null;
+        });
+        return row;
+      }),
+      pc: periods.length
+    };
+  }, [filtered, timeAgg]);
+
   // Grafikon 4: Najkasnije točenje
-  const c4 = useMemo(() => {
+  const c_kasno = useMemo(() => {
     const mx: Record<string,{m:number;t:string}> = {};
     filtered.filter((r: any) => r.kategorija === "Gorivo").forEach((r: any) => {
       const mins = r.date!.getHours()*60 + r.date!.getMinutes();
@@ -481,53 +542,110 @@ export default function FleetDashboard() {
           <KPI title="Активна возила" value={kpis.uv.toString()} sub="Јединствене таблице у периоду" icon="🚛" color={C.green} dim={C.greenDim}/>
         </div>
 
-        {/* Grafikoni 1 & 2 */}
+        {/* Grafikoni: 4 Top 10 box-a */}
         <div className="mob-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18,marginBottom:18,animation:"fadeIn 0.6s ease"}}>
           <CCard title="Топ 10 возила по укупној потрошњи" sub="Сви производи"
-            callouts={<><Callout icon="🏆" label="Највећи потрошач" value={c1.topP||"—"} color={C.accent}/><Callout icon="💰" label="Износ #1" value={fR(c1.topV||0)} color={C.accentLight}/><Callout icon="Σ" label="Укупно Топ 10" value={fR(c1.total)} color={C.text}/></>}>
-            <ResponsiveContainer width="100%" height={310}>
-              <BarChart data={c1.data} layout="vertical" margin={{left:10,right:20,top:5,bottom:5}}>
+            callouts={<><Callout icon="🏆" label="Највећи потрошач" value={c_top_ukupno.topP||"—"} color={C.accent}/><Callout icon="💰" label="Износ #1" value={fR(c_top_ukupno.topV||0)} color={C.accentLight}/><Callout icon="Σ" label="Укупно Топ 10" value={fR(c_top_ukupno.total)} color={C.text}/></>}>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={c_top_ukupno.data} layout="vertical" margin={{left:10,right:20,top:5,bottom:5}}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false}/>
                 <XAxis type="number" tickFormatter={fK} tick={{fill:C.textDim,fontSize:11}} axisLine={false} tickLine={false}/>
                 <YAxis type="category" dataKey="plate" width={85} tick={{fill:C.textMuted,fontSize:11,fontFamily:"'JetBrains Mono',monospace"}} axisLine={false} tickLine={false}/>
                 <Tooltip content={<TT/>}/>
-                <Bar dataKey="total" name="Укупно" radius={[0,6,6,0]} barSize={20}>
-                  {c1.data.map((_: any,i: number) => <Cell key={i} fill={CC[i%CC.length]} fillOpacity={0.85}/>)}
+                <Bar dataKey="total" name="Укупно (RSD)" radius={[0,6,6,0]} barSize={20}>
+                  {c_top_ukupno.data.map((_: any,i: number) => <Cell key={i} fill={CC[i%CC.length]} fillOpacity={0.85}/>)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </CCard>
 
-          <CCard title="Топ 10 – вангоривна потрошња" sub="Без: ДИЗЕЛ, БМБ, MOTION"
-            callouts={<><Callout icon="🏆" label="Највећи потрошач" value={c2.topP||"—"} color={C.amber}/><Callout icon="🛒" label="Износ #1" value={fR(c2.topV||0)} color={C.amber}/><Callout icon="Σ" label="Укупно Топ 10" value={fR(c2.total)} color={C.text}/></>}>
-            <ResponsiveContainer width="100%" height={310}>
-              <BarChart data={c2.data} layout="vertical" margin={{left:10,right:20,top:5,bottom:5}}>
+          <CCard title="Топ 10 – лична потрошња" sub="Цигарете, храна, итд. (Трошкови остало)"
+            callouts={<><Callout icon="🏆" label="Највећи потрошач" value={c_top_licno.topP||"—"} color={C.amber}/><Callout icon="🛒" label="Износ #1" value={fR(c_top_licno.topV||0)} color={C.amber}/><Callout icon="Σ" label="Укупно Топ 10" value={fR(c_top_licno.total)} color={C.text}/></>}>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={c_top_licno.data} layout="vertical" margin={{left:10,right:20,top:5,bottom:5}}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false}/>
                 <XAxis type="number" tickFormatter={fK} tick={{fill:C.textDim,fontSize:11}} axisLine={false} tickLine={false}/>
                 <YAxis type="category" dataKey="plate" width={85} tick={{fill:C.textMuted,fontSize:11,fontFamily:"'JetBrains Mono',monospace"}} axisLine={false} tickLine={false}/>
                 <Tooltip content={<TT/>}/>
-                <Bar dataKey="total" name="Вангоривно" radius={[0,6,6,0]} barSize={20}>
-                  {c2.data.map((_: any,i: number) => <Cell key={i} fill={CC[(i+3)%CC.length]} fillOpacity={0.85}/>)}
+                <Bar dataKey="total" name="Лична потрошња (RSD)" radius={[0,6,6,0]} barSize={20}>
+                  {c_top_licno.data.map((_: any,i: number) => <Cell key={i} fill={CC[(i+3)%CC.length]} fillOpacity={0.85}/>)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CCard>
+
+          <CCard title="Топ 10 – потрошња горива" sub="Количина у литрима по возилу"
+            callouts={<><Callout icon="🏆" label="Највећи потрошач" value={c_top_gorivo.topP||"—"} color={C.cyan}/><Callout icon="⛽" label="Литри #1" value={(c_top_gorivo.topV||0).toLocaleString()+" L"} color={C.cyan}/><Callout icon="Σ" label="Укупно Топ 10" value={c_top_gorivo.total.toLocaleString()+" L"} color={C.text}/></>}>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={c_top_gorivo.data} layout="vertical" margin={{left:10,right:20,top:5,bottom:5}}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false}/>
+                <XAxis type="number" tickFormatter={fK} tick={{fill:C.textDim,fontSize:11}} axisLine={false} tickLine={false}/>
+                <YAxis type="category" dataKey="plate" width={85} tick={{fill:C.textMuted,fontSize:11,fontFamily:"'JetBrains Mono',monospace"}} axisLine={false} tickLine={false}/>
+                <Tooltip content={(props:any) => <TT {...props} fmt={(v:number)=>v.toLocaleString()+" L"} />}/>
+                <Bar dataKey="total" name="Гориво (L)" radius={[0,6,6,0]} barSize={20}>
+                  {c_top_gorivo.data.map((_: any,i: number) => <Cell key={i} fill={CC[(i+1)%CC.length]} fillOpacity={0.85}/>)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CCard>
+
+          <CCard title="Топ 10 – додатна мазива" sub="Антифриз, уље, итд. (Течности за возила)"
+            callouts={<><Callout icon="🏆" label="Највећи потрошач" value={c_top_maziva.topP||"—"} color={C.indigo}/><Callout icon="💧" label="Износ #1" value={fR(c_top_maziva.topV||0)} color={C.indigo}/><Callout icon="Σ" label="Укупно Топ 10" value={fR(c_top_maziva.total)} color={C.text}/></>}>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={c_top_maziva.data} layout="vertical" margin={{left:10,right:20,top:5,bottom:5}}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false}/>
+                <XAxis type="number" tickFormatter={fK} tick={{fill:C.textDim,fontSize:11}} axisLine={false} tickLine={false}/>
+                <YAxis type="category" dataKey="plate" width={85} tick={{fill:C.textMuted,fontSize:11,fontFamily:"'JetBrains Mono',monospace"}} axisLine={false} tickLine={false}/>
+                <Tooltip content={<TT/>}/>
+                <Bar dataKey="total" name="Додатна мазива (RSD)" radius={[0,6,6,0]} barSize={20}>
+                  {c_top_maziva.data.map((_: any,i: number) => <Cell key={i} fill={CC[(i+6)%CC.length]} fillOpacity={0.85}/>)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </CCard>
         </div>
 
-        {/* Grafikon 3: Trend */}
+        {/* Grafikon 3: Trend потрошње */}
         <div style={{marginBottom:18,animation:"fadeIn 0.7s ease"}}>
           <CCard title="Трендови потрошње – Топ 10 возила" sub={`Агрегација по ${timeAgg==="week"?"недељи":"месецу"}`}
             extra={<Pill opts={[{l:"Месечно",v:"month"},{l:"Недељно",v:"week"}]} val={timeAgg} onChange={setTimeAgg}/>}
-            callouts={<><Callout icon="📅" label="Периода" value={c3.pc.toString()} color={C.cyan}/><Callout icon="📈" label="Возила" value={c3.plates.length.toString()} color={C.indigo}/><Callout icon="🔀" label="Приказ" value={timeAgg==="week"?"Недељни":"Месечни"} color={C.accentLight}/></>}>
+            callouts={<><Callout icon="📅" label="Периода" value={c_trend_potrosnja.pc.toString()} color={C.cyan}/><Callout icon="📈" label="Возила" value={c_trend_potrosnja.plates.length.toString()} color={C.indigo}/><Callout icon="🔀" label="Приказ" value={timeAgg==="week"?"Недељни":"Месечни"} color={C.accentLight}/></>}>
             <ResponsiveContainer width="100%" height={370}>
-              <AreaChart data={c3.data} margin={{left:10,right:20,top:10,bottom:5}}>
-                <defs>{c3.plates.map((_: string, i: number) => (<linearGradient key={i} id={`g${i}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={CC[i]} stopOpacity={0.22}/><stop offset="100%" stopColor={CC[i]} stopOpacity={0.02}/></linearGradient>))}</defs>
+              <AreaChart data={c_trend_potrosnja.data} margin={{left:10,right:20,top:10,bottom:5}}>
+                <defs>{c_trend_potrosnja.plates.map((_: string, i: number) => (<linearGradient key={i} id={`g${i}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={CC[i]} stopOpacity={0.22}/><stop offset="100%" stopColor={CC[i]} stopOpacity={0.02}/></linearGradient>))}</defs>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
                 <XAxis dataKey="period" tick={{fill:C.textDim,fontSize:10}} axisLine={false} tickLine={false}/>
                 <YAxis tickFormatter={fK} tick={{fill:C.textDim,fontSize:11}} axisLine={false} tickLine={false}/>
                 <Tooltip content={<TT/>}/>
                 <Legend wrapperStyle={{fontSize:11,paddingTop:12,fontFamily:"'JetBrains Mono',monospace"}} iconType="circle" iconSize={8}/>
-                {c3.plates.map((plate: string, i: number) => (<Area key={plate} type="monotone" dataKey={plate} name={plate} stroke={CC[i]} strokeWidth={2} fill={`url(#g${i})`} dot={false} activeDot={{r:4,strokeWidth:2}}/>))}
+                {c_trend_potrosnja.plates.map((plate: string, i: number) => (<Area key={plate} type="monotone" dataKey={plate} name={plate} stroke={CC[i]} strokeWidth={2} fill={`url(#g${i})`} dot={false} activeDot={{r:4,strokeWidth:2}}/>))}
+              </AreaChart>
+            </ResponsiveContainer>
+          </CCard>
+        </div>
+
+        {/* Grafikon 5: Trend cene горива */}
+        <div style={{marginBottom:18,animation:"fadeIn 0.75s ease"}}>
+          <CCard title="Тренд просечне цене горива (RSD/L)" sub={`Агрегација по ${timeAgg==="week"?"недељи":"месецу"} · По типовима горива`}
+            callouts={<><Callout icon="⛽" label="Врсте горива" value={c_trend_cena.products.length.toString()} color={C.green}/><Callout icon="📈" label="Периода" value={c_trend_cena.pc.toString()} color={C.accentLight}/></>}>
+            <ResponsiveContainer width="100%" height={260}>
+              <AreaChart data={c_trend_cena.data} margin={{left:10,right:20,top:10,bottom:5}}>
+                <defs>
+                  {c_trend_cena.products.map((_: string, i: number) => (
+                    <linearGradient key={`gCena${i}`} id={`gCena${i}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={CC[(i+2)%CC.length]} stopOpacity={0.22}/>
+                      <stop offset="100%" stopColor={CC[(i+2)%CC.length]} stopOpacity={0.02}/>
+                    </linearGradient>
+                  ))}
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.border}/>
+                <XAxis dataKey="period" tick={{fill:C.textDim,fontSize:10}} axisLine={false} tickLine={false}/>
+                <YAxis domain={['auto', 'auto']} tick={{fill:C.textDim,fontSize:11}} axisLine={false} tickLine={false}/>
+                <Tooltip content={(props:any) => <TT {...props} fmt={(v:number)=>v.toFixed(2)+" RSD/L"} />}/>
+                <Legend wrapperStyle={{fontSize:11,paddingTop:12,fontFamily:"'JetBrains Mono',monospace"}} iconType="circle" iconSize={8}/>
+                {c_trend_cena.products.map((prod: string, i: number) => (
+                  <Area key={prod} type="monotone" dataKey={prod} name={prod} stroke={CC[(i+2)%CC.length]} strokeWidth={2} fill={`url(#gCena${i})`} connectNulls={true} dot={{r:3,fill:CC[(i+2)%CC.length]}} activeDot={{r:5,strokeWidth:2,fill:"#fff",stroke:CC[(i+2)%CC.length]}}/>
+                ))}
               </AreaChart>
             </ResponsiveContainer>
           </CCard>
@@ -536,9 +654,9 @@ export default function FleetDashboard() {
         {/* Grafikon 4: Najkasnije */}
         <div style={{animation:"fadeIn 0.8s ease"}}>
           <CCard title="Топ 10 најкасније точе гориво" sub="Возила са најкаснијим точењем у току дана"
-            callouts={<><Callout icon="🌙" label="Најкасније точење" value={c4.lT||"—"} color={C.rose}/><Callout icon="🚛" label="Возило" value={c4.lP||"—"} color={C.rose}/><Callout icon="⚠️" label="После 21ч" value={c4.data.filter(d=>d.minutes>1260).length+" возила"} color={C.amber}/></>}>
+            callouts={<><Callout icon="🌙" label="Најкасније точење" value={c_kasno.lT||"—"} color={C.rose}/><Callout icon="🚛" label="Возило" value={c_kasno.lP||"—"} color={C.rose}/><Callout icon="⚠️" label="После 21ч" value={c_kasno.data.filter((d: any)=>d.minutes>1260).length+" возила"} color={C.amber}/></>}>
             <ResponsiveContainer width="100%" height={310}>
-              <BarChart data={c4.data} layout="vertical" margin={{left:10,right:30,top:5,bottom:5}}>
+              <BarChart data={c_kasno.data} layout="vertical" margin={{left:10,right:30,top:5,bottom:5}}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.border} horizontal={false}/>
                 <XAxis type="number" domain={[0,1440]}
                   tickFormatter={(v: number) => `${String(Math.floor(v/60)).padStart(2,"0")}:${String(v%60).padStart(2,"0")}`}
@@ -547,14 +665,14 @@ export default function FleetDashboard() {
                 <YAxis type="category" dataKey="plate" width={85} tick={{fill:C.textMuted,fontSize:11,fontFamily:"'JetBrains Mono',monospace"}} axisLine={false} tickLine={false}/>
                 <Tooltip content={({active,payload,label}: any) => {
                   if (!active || !payload?.length) return null;
-                  const item = c4.data.find(d => d.plate === label);
+                  const item = c_kasno.data.find((d: any) => d.plate === label);
                   return (<div style={{background:"rgba(15,16,24,0.97)",border:`1px solid ${C.borderLight}`,borderRadius:10,padding:"10px 14px",boxShadow:"0 8px 32px rgba(0,0,0,0.6)"}}>
                     <div style={{color:C.textMuted,fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>{label}</div>
                     <div style={{color:C.text,fontSize:14,marginTop:4}}>Последње точење: <strong style={{color:C.rose}}>{item?.time}</strong></div>
                   </div>);
                 }}/>
                 <Bar dataKey="minutes" name="Време" radius={[0,6,6,0]} barSize={20}>
-                  {c4.data.map((e: any, i: number) => <Cell key={i} fill={e.minutes>1260?C.rose:e.minutes>1080?C.amber:C.cyan} fillOpacity={0.8}/>)}
+                  {c_kasno.data.map((e: any, i: number) => <Cell key={i} fill={e.minutes>1260?C.rose:e.minutes>1080?C.amber:C.cyan} fillOpacity={0.8}/>)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
