@@ -59,12 +59,24 @@ function pDate(s: string) {
   const d = new Date(c);
   return isNaN(d.getTime()) ? null : d;
 }
-function pNum(s: string) { if (!s) return 0; var c = s.replace(/[^0-9.,-]/g, ""); c = c.replace(/\./g, "").replace(",", "."); return parseFloat(c) || 0; }
+function pNum(s: string) {
+  if (!s) return 0;
+  let c = String(s).replace(/[^0-9.,-]/g, "");
+  if (c.lastIndexOf(",") > c.lastIndexOf(".")) {
+    return parseFloat(c.replace(/\./g, "").replace(",", ".")) || 0;
+  } else {
+    return parseFloat(c.replace(/,/g, "")) || 0;
+  }
+}
 function fR(n: number) { return new Intl.NumberFormat("sr-RS").format(Math.round(n)) + " RSD"; }
 function fK(n: number) { if (n >= 1e6) return (n/1e6).toFixed(1) + "M"; if (n >= 1e3) return (n/1e3).toFixed(1) + "K"; return n.toFixed(0); }
 
-const FK = ["DIZEL","BMB","MOTION","BENZIN","DIESEL","GASOLINE","EVRO DIZ","EDMAXX","MAXXM","MAXX"];
-function isF(p: string) { const u = (p||"").toUpperCase(); return FK.some(k => u.includes(k)); }
+function getCategory(p: string) {
+  const u = (p||"").toLowerCase();
+  if (["ad blue", "antifriz", "tecnosti", "aditivi"].some(k => u.includes(k))) return "Tecnosti za vozila";
+  if (["cigarete", "artikli", "hrana", "kafa", "sendvic"].some(k => u.includes(k))) return "Troskovi ostalo";
+  return "Gorivo";
+}
 
 // ─── Tooltip ────────────────────────────────────────────────
 function TT({ active, payload, label, fmt }: any) {
@@ -221,7 +233,9 @@ export default function FleetDashboard() {
       "\u0414\u0430\u0442\u0443\u043c": r.TRANSACTION_DATE || (r.date ? r.date.toLocaleString("sr-RS") : ""),
       "\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u0434": r.product,
       "\u0418\u0437\u043d\u043e\u0441 (RSD)": Math.round(r.amount),
-      "\u0413\u043e\u0440\u0438\u0432\u043e": isF(r.product) ? "Da" : "Ne",
+      "Kategorija": r.kategorija,
+      "Količina (L)": r.liters,
+      "Cena (RSD/L)": r.unitPrice,
       "\u041b\u043e\u043a\u0430\u0446\u0438\u0458\u0430": r.SITE_TOWN || "",
       "\u0410\u0434\u0440\u0435\u0441\u0430": r.SITE_STREET || "",
     }));
@@ -237,6 +251,8 @@ export default function FleetDashboard() {
     const wsKPI = XLSX.utils.json_to_sheet([
       { "Metrika": "Ukupna potrosnja (RSD)", "Vrednost": Math.round(kpis.ts) },
       { "Metrika": "Broj transakcija",       "Vrednost": kpis.tt },
+      { "Metrika": "Potrošeno goriva (L)",   "Vrednost": Math.round(kpis.totalLiters) },
+      { "Metrika": "Prosečna cena (RSD/L)",  "Vrednost": +kpis.avgPrice.toFixed(2) },
       { "Metrika": "Gorivo transakcije",     "Vrednost": kpis.ft },
       { "Metrika": "Vangorivno (RSD)",       "Vrednost": Math.round(kpis.nfs) },
       { "Metrika": "Vangorivno %",           "Vrednost": +((kpis.nfs/kpis.ts*100)||0).toFixed(2) },
@@ -253,7 +269,8 @@ export default function FleetDashboard() {
     XLSX.utils.book_append_sheet(wb, wsNF, "Vangorivna");
     const wsAll = XLSX.utils.json_to_sheet(filtered.map((r: any) => ({
       "Tablica": r.plate, "Datum": r.date ? r.date.toLocaleString("sr-RS") : "",
-      "Proizvod": r.product, "Iznos (RSD)": Math.round(r.amount), "Lokacija": r.SITE_TOWN || "",
+      "Proizvod": r.product, "Kategorija": r.kategorija, "Iznos (RSD)": Math.round(r.amount), 
+      "Količina (L)": r.liters, "Cena (RSD/L)": r.unitPrice, "Lokacija": r.SITE_TOWN || "",
     })));
     XLSX.utils.book_append_sheet(wb, wsAll, "Sve transakcije");
     XLSX.writeFile(wb, "srbijaput_izvestaj_" + new Date().toISOString().slice(0,10) + ".xlsx");
@@ -291,17 +308,20 @@ export default function FleetDashboard() {
 
   // ─── Obrada podataka ──────────────────────────────────
   const data = useMemo(() =>
-    rawData.map(r => ({
+    (rawData || []).map(r => ({
       ...r,
       date: pDate(r.TRANSACTION_DATE),
-      amount: pNum(r.GROSS_CC),
+      amount: pNum(r.AMOUNT),
+      liters: pNum(r.QUANTITY),
+      unitPrice: pNum(r.UNITPRICE),
+      kategorija: getCategory((r.PRODUCT_INV || "").trim()),
       plate: (r.LICENSE_PLATE_NO || "").trim(),
       product: (r.PRODUCT_INV || "").trim(),
     })).filter(r => r.date && r.plate),
   [rawData]);
 
   const filtered = useMemo(() => {
-    let d = data;
+    let d = data || [];
     if (dateFrom) { const f = new Date(dateFrom); d = d.filter(r => r.date! >= f); }
     if (dateTo) { const t = new Date(dateTo); t.setHours(23,59,59); d = d.filter(r => r.date! <= t); }
     return d;
@@ -311,10 +331,19 @@ export default function FleetDashboard() {
   const kpis = useMemo(() => {
     const ts = filtered.reduce((s,r) => s + r.amount, 0);
     const tt = filtered.length;
-    const ft = filtered.filter(r => isF(r.product)).length;
-    const nfs = filtered.filter(r => !isF(r.product)).reduce((s,r) => s + r.amount, 0);
-    const uv = new Set(filtered.map(r => r.plate)).size;
-    return { ts, tt, ft, nfs, uv };
+    let ft = 0, nfs = 0, totalLiters = 0, totalFuelCost = 0;
+    filtered.forEach((r: any) => {
+      if (r.kategorija === "Gorivo") {
+        ft++;
+        totalLiters += (r.liters || 0);
+        totalFuelCost += (r.amount || 0);
+      } else {
+        nfs += (r.amount || 0);
+      }
+    });
+    const avgPrice = totalLiters > 0 ? totalFuelCost / totalLiters : 0;
+    const uv = new Set(filtered.map((r: any) => r.plate)).size;
+    return { ts, tt, ft, nfs, uv, totalLiters, avgPrice };
   }, [filtered]);
 
   // Grafikon 1: Top 10 ukupno
@@ -329,7 +358,7 @@ export default function FleetDashboard() {
   // Grafikon 2: Top 10 van goriva
   const c2 = useMemo(() => {
     const m: Record<string,number> = {};
-    filtered.filter(r => !isF(r.product)).forEach(r => { m[r.plate] = (m[r.plate]||0) + r.amount; });
+    filtered.filter((r: any) => r.kategorija !== "Gorivo").forEach((r: any) => { m[r.plate] = (m[r.plate]||0) + r.amount; });
     const s = Object.entries(m).sort((a,b) => b[1]-a[1]).slice(0,10);
     const tp = s[0]; const tot = s.reduce((sum,e) => sum + e[1], 0);
     return { data: s.map(([plate,total]) => ({plate,total:Math.round(total)})), topP: tp?.[0], topV: tp?.[1], total: tot };
@@ -364,7 +393,7 @@ export default function FleetDashboard() {
   // Grafikon 4: Najkasnije točenje
   const c4 = useMemo(() => {
     const mx: Record<string,{m:number;t:string}> = {};
-    filtered.filter(r => isF(r.product)).forEach(r => {
+    filtered.filter((r: any) => r.kategorija === "Gorivo").forEach((r: any) => {
       const mins = r.date!.getHours()*60 + r.date!.getMinutes();
       const ts = `${String(r.date!.getHours()).padStart(2,"0")}:${String(r.date!.getMinutes()).padStart(2,"0")}`;
       if (!mx[r.plate] || mins > mx[r.plate].m) mx[r.plate] = {m:mins, t:ts};
@@ -447,7 +476,7 @@ export default function FleetDashboard() {
         {/* KPI */}
         <div className="mob-kpi" style={{display:"flex",gap:14,marginBottom:24,flexWrap:"wrap",animation:"fadeIn 0.5s ease"}}>
           <KPI title="Укупна потрошња" value={fR(kpis.ts)} sub={`${fK(kpis.ts)} за сва возила`} icon="💰" color={C.accent} dim={C.accentGlow}/>
-          <KPI title="Трансакције" value={kpis.tt.toLocaleString()} sub={`${kpis.ft} гориво · ${kpis.tt-kpis.ft} остало`} icon="📊" color={C.cyan} dim={C.cyanDim}/>
+          <KPI title="Потрошено горива" value={kpis.totalLiters.toFixed(0) + " L"} sub={`Просек: ${kpis.avgPrice.toFixed(2)} RSD/L`} icon="⛽" color={C.cyan} dim={C.cyanDim}/>
           <KPI title="Вангоривна потрошња" value={fR(kpis.nfs)} sub={`${((kpis.nfs/kpis.ts)*100||0).toFixed(1)}% од укупне`} icon="🛒" color={C.amber} dim={C.amberDim}/>
           <KPI title="Активна возила" value={kpis.uv.toString()} sub="Јединствене таблице у периоду" icon="🚛" color={C.green} dim={C.greenDim}/>
         </div>
